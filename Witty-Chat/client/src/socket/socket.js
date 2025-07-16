@@ -261,6 +261,7 @@ const sendPrivateMessage = (recipientId, content) => {
     connect,
     disconnect,
     sendMessage,
+    setMessages,
     sendPrivateMessage,
     setTyping,
       loadMoreMessages,

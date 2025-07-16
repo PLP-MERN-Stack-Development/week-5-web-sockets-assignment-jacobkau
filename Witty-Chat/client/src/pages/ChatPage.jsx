@@ -8,6 +8,7 @@ export default function ChatPage() {
     users,
     messages,
     sendMessage,
+    setMessages,
     setTyping,
     typingUsers,
     isConnected,
@@ -26,14 +27,14 @@ export default function ChatPage() {
   const [isSearching, setIsSearching] = useState(false);
 
   // Filter messages based on active chat
- const currentMessages = activeChat
-  ? messages.filter(
-      (msg) =>
-        msg.isPrivate &&
-        ((msg.senderId === activeChat && msg.recipientId === socket.id) ||
-         (msg.senderId === socket.id && msg.recipientId === activeChat))
-    )
-  : messages.filter((msg) => !msg.isPrivate);
+  const currentMessages = activeChat
+    ? messages.filter(
+        (msg) =>
+          msg.isPrivate &&
+          ((msg.senderId === activeChat && msg.recipientId === socket.id) ||
+            (msg.senderId === socket.id && msg.recipientId === activeChat))
+      )
+    : messages.filter((msg) => !msg.isPrivate);
 
   const filteredMessages = currentMessages.filter((msg) =>
     msg.message.toLowerCase().includes(searchQuery.toLowerCase())
@@ -64,40 +65,69 @@ export default function ChatPage() {
   // Track unread messages
   useEffect(() => {
     const counts = {};
-     users.forEach((u) => {
-    if (u.id !== socket.id) {
-      counts[u.id] = messages.filter(
-        (m) => m.isPrivate &&
-              m.senderId === u.id &&
-              m.recipientId === socket.id &&
-              !m.readAt
-      ).length;
-    }
-  });
-   
+    
+    // Public messages count (only count unread public messages)
     counts["public"] = messages.filter(
-    (m) => !m.isPrivate && 
-          m.senderId !== socket.id && 
-          !m.readAt
-  ).length;
+      (m) => !m.isPrivate && 
+            m.senderId !== socket.id && 
+            !m.readAt
+    ).length;
+
+    // Private messages counts
+    users.forEach((u) => {
+      if (u.id !== socket.id) {
+        counts[u.id] = messages.filter(
+          (m) => m.isPrivate &&
+                m.senderId === u.id &&
+                m.recipientId === socket.id &&
+                !m.readAt
+        ).length;
+      }
+    });
+
     setUnreadCounts(counts);
   }, [messages, users, socket.id]);
 
-  // Debugging effect
+  // Mark messages as read when chat is opened
   useEffect(() => {
-    console.log("All messages:", messages);
-    if (activeChat) {
-      console.log(
-        "Messages for current chat:",
-        messages.filter(
-          (msg) =>
-            msg.isPrivate &&
-            ((msg.senderId === activeChat && msg.recipientId === socket.id) ||
-              (msg.senderId === socket.id && msg.recipientId === activeChat))
-        )
-      );
-    }
-  }, [messages, activeChat, socket.id]);
+    if (!socket || !socket.connected) return;
+
+    const markMessagesAsRead = () => {
+      const unreadMessages = messages.filter(msg => {
+        if (activeChat) {
+          return msg.isPrivate && 
+                 msg.senderId === activeChat && 
+                 msg.recipientId === socket.id &&
+                 !msg.readAt;
+        } else {
+          return !msg.isPrivate && 
+                 msg.senderId !== socket.id && 
+                 !msg.readAt;
+        }
+      });
+
+      if (unreadMessages.length > 0) {
+        const messageIds = unreadMessages.map(msg => msg.id);
+        
+        // Update local state first for immediate feedback
+        setMessages(prev => prev.map(msg => 
+          messageIds.includes(msg.id) ? { ...msg, readAt: new Date().toISOString() } : msg
+        ));
+
+        // Notify server
+        if (activeChat) {
+          socket.emit('mark_as_read', { 
+            messageIds, 
+            recipientId: activeChat 
+          });
+        } else {
+          socket.emit('mark_public_as_read', { messageIds });
+        }
+      }
+    };
+
+    markMessagesAsRead();
+  }, [activeChat, messages,setMessages, socket]);
 
   if (!isConnected || !user) {
     return (
@@ -125,7 +155,13 @@ export default function ChatPage() {
 
     try {
       if (activeChat) {
-        await sendPrivateMessage(activeChat, message);
+        const msg = await sendPrivateMessage(activeChat, message);
+        // Optimistically update with readBy info if recipient is viewing the chat
+        if (users.some(u => u.id === activeChat && u.isActive)) {
+          setMessages(prev => prev.map(m => 
+            m.id === msg.id ? { ...m, readAt: new Date().toISOString() } : m
+          ));
+        }
       } else {
         sendMessage(message);
       }
@@ -133,7 +169,6 @@ export default function ChatPage() {
       setTyping(false);
     } catch (error) {
       console.error("Error sending message:", error);
-      // Show error to user
     }
   };
 
@@ -144,7 +179,7 @@ export default function ChatPage() {
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      {/* Sidebar - Contacts List (Fixed) */}
+      {/* Sidebar - Contacts List */}
       <div
         className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} 
           md:translate-x-0 transform transition-transform duration-200 ease-in-out
@@ -162,7 +197,6 @@ export default function ChatPage() {
               viewBox="0 0 20 20"
               fill="currentColor"
             >
-              to
               <path
                 fillRule="evenodd"
                 d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
@@ -186,16 +220,18 @@ export default function ChatPage() {
           <div className="bg-green-500 text-white rounded-full h-10 w-10 flex items-center justify-center mr-3">
             <span>#</span>
           </div>
-          <div className="flex-1">
-            <p className="font-medium">Public Room</p>
+          <div className="flex-1 flex items-center">
+            <div>
+              <p className="font-medium">Public Room</p>
+              <p className="text-xs text-gray-500">
+                {messages.filter((m) => !m.isPrivate).length} messages
+              </p>
+            </div>
             {unreadCounts["public"] > 0 && (
-              <span className="bg-green-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center ml-1">
+              <span className="ml-auto bg-green-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                 {unreadCounts["public"]}
               </span>
             )}
-            <p className="text-xs text-gray-500">
-              {messages.filter((m) => !m.isPrivate).length} messages
-            </p>
           </div>
         </div>
 
@@ -261,7 +297,7 @@ export default function ChatPage() {
               <p className="mb-2 font-semibold">Online Users:</p>
               <ul className="space-y-1">
                 {users
-                  .filter((u) => u.id !== socket.id) // exclude yourself
+                  .filter((u) => u.id !== socket.id)
                   .map((user) => (
                     <li key={user.id} className="flex items-center gap-2">
                       <span className="h-2 w-2 bg-green-500 rounded-full inline-block"></span>
@@ -401,8 +437,10 @@ export default function ChatPage() {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
-                      {isCurrentUser && msg.readBy?.includes(activeChat) && (
-                        <span className="ml-1">✓✓</span>
+                      {isCurrentUser && msg.isPrivate && (
+                        <span className="ml-1">
+                          {msg.readAt ? "✓✓" : "✓"}
+                        </span>
                       )}
                     </p>
                   </div>
