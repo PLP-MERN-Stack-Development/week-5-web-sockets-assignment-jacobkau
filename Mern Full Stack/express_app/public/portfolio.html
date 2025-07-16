@@ -1,0 +1,90 @@
+<!-- public/portfolio.html -->
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description" content="Jacob Witty's portfolio. Full-stack Developer specializing in Node.js, MongoDB, PHP, and Laravel.">
+        <meta name="author" content="Jacob Witty">
+        <meta name="keywords" content="Jacob Witty, Portfolio, Full-stack Developer, Node.js, MongoDB, PHP, Laravel, Projects">
+    </head>
+    <body>
+        <h1>Jacob Witty</h1>
+        <p>Full-stack Developer | Node.js | MongoDB | PHP | Laravel</p>
+        <h2>Projects</h2>
+        <ul>
+            <li>📚 Bookstore CRUD App</li>
+            <li>🌍 Linkpal Business Network</li>
+            <li>🎓 Bits TutorConnect</li>
+        </ul>
+        <form id="addBookForm">
+            <input
+                type="text"
+                name="title"
+                placeholder="Title"
+                required
+            >
+            <input
+                type="text"
+                name="author"
+                placeholder="Author"
+                required
+            >
+            <input type="text" name="genre" placeholder="Genre">
+            <input
+                type="number"
+                name="price"
+                placeholder="Price"
+                step="0.01"
+            >
+            <button type="submit">Add Book</button>
+        </form>
+        <input type="text" id="search" placeholder="Search by title, genre, or author">
+        <button onclick="searchBooks()">Search</button>
+        <ul id="bookList"></ul>
+        <script>
+  async function searchBooks() {
+    const query = document.getElementById('search').value;
+    const res = await fetch(`/books/search?q=${encodeURIComponent(query)}`);
+    const books = await res.json();
+
+    const list = document.getElementById('bookList');
+    list.innerHTML = '';
+    books.forEach(book => {
+      list.innerHTML += `<li>${book.title} by ${book.author} - ${book.genre}</li>`;
+    });
+  }
+
+  document.getElementById('addBookForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const book = Object.fromEntries(formData.entries());
+
+    const response = await fetch('/books', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(book)
+    });
+
+    if (response.ok) {
+      alert("Book added!");
+      e.target.reset();
+    } else {
+      alert("Error adding book.");
+    }
+  });
+     
+  fetch('/api/books')
+    .then(response => response.json())
+    .then(data => {
+      const container = document.getElementById('book-list');
+      data.forEach(book => {
+        const div = document.createElement('div');
+        div.innerHTML = `<h3>${book.title}</h3><p>By ${book.author} - ${book.genre}</p>`;
+        container.appendChild(div);
+      });
+    });
+        </script>
+        <div id="book-list"></div>
+    </body>
+</html>
