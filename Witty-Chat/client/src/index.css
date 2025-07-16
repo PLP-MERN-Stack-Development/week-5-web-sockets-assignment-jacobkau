@@ -1,0 +1,10 @@
+@import "tailwindcss";
+@media (max-width: 768px) {
+  .message-input input {
+    font-size: 16px; /* Prevent iOS zoom on focus */
+  }
+  
+  .sidebar {
+    width: 80vw;
+  }
+}

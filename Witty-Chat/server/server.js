@@ -77,21 +77,27 @@ io.on('connection', (socket) => {
       io.emit('typing_users', Object.values(typingUsers));
     }
   });
+socket.on('private_message', ({ to, message }, ack) => {
+  const messageData = {
+    id: Date.now(),
+    sender: users[socket.id]?.username || 'Anonymous',
+    senderId: socket.id,
+    recipientId: to,
+    message,
+    timestamp: new Date().toISOString(),
+    isPrivate: true,
+    readAt: null
+  };
 
-  // Handle private messages
-  socket.on('private_message', ({ to, message }) => {
-    const messageData = {
-      id: Date.now(),
-      sender: users[socket.id]?.username || 'Anonymous',
-      senderId: socket.id,
-      message,
-      timestamp: new Date().toISOString(),
-      isPrivate: true,
-    };
-    
-    socket.to(to).emit('private_message', messageData);
-    socket.emit('private_message', messageData);
-  });
+  socket.to(to).emit('private_message', messageData);
+  socket.emit('private_message', messageData);
+  
+  messages.push(messageData);
+  
+  if (ack) {
+    ack({ status: 'delivered', messageId: messageData.id });
+  }
+});
 
   // Handle disconnection
   socket.on('disconnect', () => {
@@ -109,10 +115,31 @@ io.on('connection', (socket) => {
   });
 });
 
-// API routes
+// server/server.js
 app.get('/api/messages', (req, res) => {
-  res.json(messages);
+  const { offset = 0, limit = 20, isPrivate = false, userId = null } = req.query;
+  
+  let filteredMessages = messages;
+  
+  if (isPrivate === 'true' && userId) {
+    filteredMessages = messages.filter(msg => 
+      (msg.senderId === userId && msg.recipientId === req.query.currentUser) ||
+      (msg.senderId === req.query.currentUser && msg.recipientId === userId)
+    );
+  } else if (isPrivate === 'false') {
+    filteredMessages = messages.filter(msg => !msg.isPrivate);
+  }
+  
+  const paginatedMessages = filteredMessages
+    .slice(parseInt(offset), parseInt(offset) + parseInt(limit))
+    .reverse();
+    
+  res.json({
+    messages: paginatedMessages,
+    hasMore: filteredMessages.length > parseInt(offset) + parseInt(limit)
+  });
 });
+
 
 app.get('/api/users', (req, res) => {
   res.json(Object.values(users));
