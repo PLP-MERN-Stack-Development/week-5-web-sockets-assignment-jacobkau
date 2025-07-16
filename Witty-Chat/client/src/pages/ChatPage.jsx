@@ -186,7 +186,7 @@ export default function ChatPage() {
           fixed md:static z-10 w-64 h-full bg-white border-r flex flex-col`}
       >
         <div className="p-3 bg-gray-50 border-b flex justify-between items-center">
-          <h2 className="text-xl font-semibold">Chats</h2>
+          <h2 className="text-xl font-semibold">All Chats</h2>
           <button
             onClick={() => setSidebarOpen(false)}
             className="md:hidden text-gray-500"
@@ -222,7 +222,7 @@ export default function ChatPage() {
           </div>
           <div className="flex-1 flex items-center">
             <div>
-              <p className="font-medium">Public Room</p>
+              <p className="font-medium">Witty Public Room</p>
               <p className="text-xs text-gray-500">
                 {messages.filter((m) => !m.isPrivate).length} messages
               </p>
@@ -356,9 +356,9 @@ export default function ChatPage() {
                 #
               </div>
               <div className="flex-1">
-                <p className="font-medium">Public Room</p>
+                <p className="font-medium">Witty Public Room</p>
                 <p className="text-xs text-gray-500">
-                  {users.length} participants
+                  {users.length} members
                 </p>
               </div>
             </>
